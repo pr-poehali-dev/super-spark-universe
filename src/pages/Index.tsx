@@ -1,550 +1,535 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Icon from '@/components/ui/icon';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import Icon from '@/components/ui/icon';
 
-const Index = () => {
-  const [pertsBalance, setPertsBalance] = useState(1500);
-  const [currentTheme, setCurrentTheme] = useState('dark');
-  const [activeTab, setActiveTab] = useState('home');
-  const [alexaMessage, setAlexaMessage] = useState('');
+type Product = { id: number; name: string; category: string; price: string; desc: string; author: string };
+type Job = { id: number; title: string; company: string; location: string; salary: string; type: string; desc: string };
+type Message = { id: number; role: 'user' | 'alexa'; text: string };
 
-  const themes = [
-    { value: 'dark', label: 'Тёмная', class: 'dark' },
-    { value: 'dark-red', label: 'Тёмно-красная', class: 'theme-dark-red dark' },
-    { value: 'dark-green', label: 'Тёмно-зелёная', class: 'theme-dark-green dark' },
-    { value: 'dark-purple', label: 'Тёмно-фиолетовая', class: 'theme-dark-purple dark' },
-    { value: 'dark-blue', label: 'Тёмно-синяя', class: 'theme-dark-blue dark' },
-    { value: 'white-red', label: 'Бело-красная', class: 'theme-white-red' },
-    { value: 'white-purple', label: 'Бело-фиолетовая', class: 'theme-white-purple' },
-    { value: 'white-blue', label: 'Бело-синяя', class: 'theme-white-blue' },
-    { value: 'white-green', label: 'Бело-зелёная', class: 'theme-white-green' },
-  ];
+const CATEGORIES = ['Игры', 'Музыка', 'Видео', 'Изображения', 'Код', 'Другое'];
+const JOB_TYPES = ['Полная занятость', 'Частичная занятость', 'Фриланс', 'Стажировка'];
+const CAT_ICONS: Record<string, string> = {
+  'Игры': 'Gamepad2', 'Музыка': 'Music', 'Видео': 'Video',
+  'Изображения': 'Image', 'Код': 'Code', 'Другое': 'Package'
+};
 
-  const handleThemeChange = (value: string) => {
-    setCurrentTheme(value);
-    const theme = themes.find(t => t.value === value);
-    if (theme) {
-      document.documentElement.className = theme.class;
-    }
+const ALEXA_REPLIES: Record<string, string> = {
+  'привет': 'Привет! Чем могу помочь? 😊',
+  'как дела': 'Отлично! Готова помочь с любыми задачами.',
+  'что умеешь': 'Я могу отвечать на вопросы, помогать с идеями, объяснять темы. Скоро научусь создавать сайты и генерировать изображения!',
+  'создай сайт': 'Функция в разработке. Скоро ты опишешь сайт словами — и я его создам!',
+  'помощь': 'Конечно! Напиши свой вопрос и я постараюсь помочь.',
+  'что такое перты': 'Перты — это внутренняя валюта SuperSpark. Используй их для покупок на маркетплейсе!',
+  'суперспарк': 'SuperSpark — это социальная сеть нового поколения с маркетплейсом, вакансиями и мной, Алексой!',
+};
+
+const THEMES: Record<string, string> = {
+  dark: 'dark',
+  'dark-purple': 'theme-dark-purple dark',
+  'dark-blue': 'theme-dark-blue dark',
+  'dark-red': 'theme-dark-red dark',
+  'dark-green': 'theme-dark-green dark',
+  'white-red': 'theme-white-red',
+  'white-purple': 'theme-white-purple',
+  'white-blue': 'theme-white-blue',
+  'white-green': 'theme-white-green',
+};
+
+const THEME_LABELS: Record<string, string> = {
+  dark: 'Тёмная',
+  'dark-purple': 'Тёмно-фиолетовая',
+  'dark-blue': 'Тёмно-синяя',
+  'dark-red': 'Тёмно-красная',
+  'dark-green': 'Тёмно-зелёная',
+  'white-red': 'Бело-красная',
+  'white-purple': 'Бело-фиолетовая',
+  'white-blue': 'Бело-синяя',
+  'white-green': 'Бело-зелёная',
+};
+
+export default function Index() {
+  const [tab, setTab] = useState('home');
+  const [theme, setTheme] = useState('dark');
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [prodForm, setProdForm] = useState({ name: '', category: 'Игры', price: '', desc: '', author: '' });
+  const [prodOpen, setProdOpen] = useState(false);
+
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobForm, setJobForm] = useState({ title: '', company: '', location: '', salary: '', type: 'Полная занятость', desc: '' });
+  const [jobOpen, setJobOpen] = useState(false);
+
+  const [messages, setMessages] = useState<Message[]>([
+    { id: 0, role: 'alexa', text: 'Привет! Я Алекса — ИИ-помощник SuperSpark. Спрашивай что угодно — помогу!' }
+  ]);
+  const [alexaInput, setAlexaInput] = useState('');
+  const [alexaTyping, setAlexaTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, alexaTyping]);
+
+  const handleTheme = (val: string) => {
+    setTheme(val);
+    document.documentElement.className = THEMES[val] ?? 'dark';
+  };
+
+  const addProduct = () => {
+    if (!prodForm.name || !prodForm.price || !prodForm.author) return;
+    setProducts(prev => [...prev, { ...prodForm, id: Date.now() }]);
+    setProdForm({ name: '', category: 'Игры', price: '', desc: '', author: '' });
+    setProdOpen(false);
+  };
+
+  const addJob = () => {
+    if (!jobForm.title || !jobForm.company) return;
+    setJobs(prev => [...prev, { ...jobForm, id: Date.now() }]);
+    setJobForm({ title: '', company: '', location: '', salary: '', type: 'Полная занятость', desc: '' });
+    setJobOpen(false);
+  };
+
+  const sendAlexaMessage = () => {
+    if (!alexaInput.trim() || alexaTyping) return;
+    const text = alexaInput.trim();
+    const userMsg: Message = { id: Date.now(), role: 'user', text };
+    setMessages(prev => [...prev, userMsg]);
+    setAlexaInput('');
+    setAlexaTyping(true);
+    const lower = text.toLowerCase();
+    const match = Object.entries(ALEXA_REPLIES).find(([key]) => lower.includes(key));
+    const reply = match
+      ? match[1]
+      : 'Интересный вопрос! Я ещё учусь — скоро смогу ответить точнее. Попробуй спросить что-то ещё!';
+    setTimeout(() => {
+      setAlexaTyping(false);
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'alexa', text: reply }]);
+    }, 1200);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50 animate-fade-in">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-5xl">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center">
-              <span className="text-white font-bold text-lg">SS</span>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+              <span className="text-white font-black text-sm">SS</span>
             </div>
-            <h1 className="text-2xl font-bold gradient-text">SuperSpark</h1>
-            <Badge variant="outline" className="ml-2">v1.0</Badge>
+            <span className="text-xl font-black tracking-tight gradient-text">SuperSpark</span>
+            <Badge variant="outline" className="text-xs hidden sm:flex">Beta</Badge>
           </div>
-
-          <div className="flex items-center gap-4">
-            <Card className="px-4 py-2 flex items-center gap-2 bg-gradient-to-r from-primary/10 to-secondary/10">
-              <Icon name="Coins" className="text-accent" size={20} />
-              <span className="font-semibold">{pertsBalance}</span>
-              <span className="text-sm text-muted-foreground">Перты</span>
-            </Card>
-
-            <Select value={currentTheme} onValueChange={handleThemeChange}>
-              <SelectTrigger className="w-[180px]">
-                <Icon name="Palette" size={16} className="mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {themes.map(theme => (
-                  <SelectItem key={theme.value} value={theme.value}>
-                    {theme.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Avatar>
-              <AvatarFallback className="bg-primary text-primary-foreground">ID</AvatarFallback>
-            </Avatar>
-          </div>
+          <Select value={theme} onValueChange={handleTheme}>
+            <SelectTrigger className="w-[160px] h-9 text-sm">
+              <Icon name="Palette" size={14} className="mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(THEME_LABELS).map(([val, label]) => (
+                <SelectItem key={val} value={val}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-7 w-full mb-6 h-auto p-1 animate-slide-up">
-            <TabsTrigger value="home" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="Home" size={20} />
-              <span className="text-xs">Главная</span>
+      <div className="container mx-auto px-4 py-6 max-w-5xl">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="w-full grid grid-cols-5 mb-8 h-12">
+            <TabsTrigger value="home" className="gap-1.5">
+              <Icon name="Home" size={16} /><span className="hidden sm:inline text-xs">Главная</span>
             </TabsTrigger>
-            <TabsTrigger value="marketplace" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="ShoppingBag" size={20} />
-              <span className="text-xs">Маркетплейс</span>
+            <TabsTrigger value="marketplace" className="gap-1.5">
+              <Icon name="ShoppingBag" size={16} /><span className="hidden sm:inline text-xs">Маркет</span>
             </TabsTrigger>
-            <TabsTrigger value="chats" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="MessageCircle" size={20} />
-              <span className="text-xs">Чаты</span>
+            <TabsTrigger value="jobs" className="gap-1.5">
+              <Icon name="Briefcase" size={16} /><span className="hidden sm:inline text-xs">Вакансии</span>
             </TabsTrigger>
-            <TabsTrigger value="jobs" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="Briefcase" size={20} />
-              <span className="text-xs">Вакансии</span>
+            <TabsTrigger value="alexa" className="gap-1.5">
+              <Icon name="Sparkles" size={16} /><span className="hidden sm:inline text-xs">Алекса</span>
             </TabsTrigger>
-            <TabsTrigger value="alexa" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="Sparkles" size={20} />
-              <span className="text-xs">Алекса</span>
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="User" size={20} />
-              <span className="text-xs">Профиль</span>
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex flex-col items-center gap-1 py-3">
-              <Icon name="Settings" size={20} />
-              <span className="text-xs">Настройки</span>
+            <TabsTrigger value="settings" className="gap-1.5">
+              <Icon name="Settings" size={16} /><span className="hidden sm:inline text-xs">Настройки</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="home" className="animate-fade-in">
-            <div className="grid gap-6">
-              <Card className="p-8 bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 border-none">
-                <h2 className="text-4xl font-bold mb-4">Добро пожаловать в SuperSpark!</h2>
-                <p className="text-lg text-muted-foreground mb-6">
-                  Универсальная социальная сеть с маркетплейсом, чатами, вакансиями и ИИ-помощником Алексой
+          {/* HOME */}
+          <TabsContent value="home" className="animate-fade-in space-y-6">
+            <div className="relative overflow-hidden rounded-2xl border border-primary/20 p-8 sm:p-12"
+              style={{ background: 'linear-gradient(135deg, hsl(var(--primary)/0.2) 0%, hsl(var(--secondary)/0.15) 50%, hsl(var(--accent)/0.1) 100%)' }}>
+              <div className="absolute inset-0 opacity-[0.04]"
+                style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '28px 28px' }} />
+              <div className="relative">
+                <Badge className="mb-4 bg-primary/20 text-primary border-primary/30">🚀 Открытая бета</Badge>
+                <h1 className="text-4xl sm:text-5xl font-black mb-4 leading-tight">
+                  Добро пожаловать<br />
+                  <span className="gradient-text">в SuperSpark</span>
+                </h1>
+                <p className="text-muted-foreground text-lg max-w-xl mb-8">
+                  Социальная сеть нового поколения — маркетплейс, вакансии и ИИ-помощник Алекса в одном месте.
                 </p>
-                <div className="flex gap-3">
-                  <Button size="lg" className="bg-primary hover:bg-primary/90">
-                    <Icon name="Rocket" size={20} className="mr-2" />
-                    Начать
+                <div className="flex flex-wrap gap-3">
+                  <Button size="lg" onClick={() => setTab('marketplace')} className="font-bold">
+                    <Icon name="ShoppingBag" size={18} className="mr-2" />Маркетплейс
                   </Button>
-                  <Button size="lg" variant="outline">
-                    Узнать больше
+                  <Button size="lg" variant="outline" onClick={() => setTab('alexa')}>
+                    <Icon name="Sparkles" size={18} className="mr-2" />Спросить Алексу
                   </Button>
                 </div>
-              </Card>
-
-              <div className="grid md:grid-cols-3 gap-4">
-                <Card className="p-6 hover:shadow-lg transition-all cursor-pointer">
-                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-                    <Icon name="ShoppingCart" size={24} className="text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">Маркетплейс</h3>
-                  <p className="text-muted-foreground">Игры, музыка, видео и многое другое</p>
-                </Card>
-
-                <Card className="p-6 hover:shadow-lg transition-all cursor-pointer">
-                  <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center mb-4">
-                    <Icon name="MessageSquare" size={24} className="text-secondary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">Чаты и звонки</h3>
-                  <p className="text-muted-foreground">Общайтесь с друзьями в реальном времени</p>
-                </Card>
-
-                <Card className="p-6 hover:shadow-lg transition-all cursor-pointer">
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mb-4">
-                    <Icon name="Sparkles" size={24} className="text-accent" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">ИИ Алекса</h3>
-                  <p className="text-muted-foreground">Создавайте сайты и приложения с помощью ИИ</p>
-                </Card>
               </div>
-
-              <Card className="p-6">
-                <h3 className="text-xl font-semibold mb-4">Официальные каналы</h3>
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1" asChild>
-                    <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer">
-                      <Icon name="Send" size={18} className="mr-2" />
-                      ID-Spark
-                    </a>
-                  </Button>
-                  <Button variant="outline" className="flex-1" asChild>
-                    <a href="https://t.me/Danii_music_Original" target="_blank" rel="noopener noreferrer">
-                      <Icon name="Music" size={18} className="mr-2" />
-                      Danii Music
-                    </a>
-                  </Button>
-                  <Button variant="outline" className="flex-1" asChild>
-                    <a href="https://www.anything.com/invite/xxqxdx6s" target="_blank" rel="noopener noreferrer">
-                      <Icon name="UserPlus" size={18} className="mr-2" />
-                      Приглашение
-                    </a>
-                  </Button>
-                </div>
-              </Card>
             </div>
-          </TabsContent>
 
-          <TabsContent value="marketplace" className="animate-fade-in">
-            <div className="grid gap-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold">Игровой маркетплейс</h2>
-                <Button>
-                  <Icon name="Plus" size={18} className="mr-2" />
-                  Загрузить товар
+            <div className="grid sm:grid-cols-3 gap-4">
+              {[
+                { icon: 'ShoppingCart', title: 'Маркетплейс', desc: 'Покупай и продавай игры, музыку, видео и другой контент', tab: 'marketplace' },
+                { icon: 'Briefcase', title: 'Вакансии', desc: 'Найди работу или разместите вакансию', tab: 'jobs' },
+                { icon: 'Sparkles', title: 'ИИ Алекса', desc: 'Задавай вопросы умному помощнику SuperSpark', tab: 'alexa' },
+              ].map(item => (
+                <Card
+                  key={item.title}
+                  className="p-6 cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all group"
+                  onClick={() => setTab(item.tab)}
+                >
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                    <Icon name={item.icon} size={22} className="text-primary" />
+                  </div>
+                  <h3 className="font-bold text-lg mb-1">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground">{item.desc}</p>
+                </Card>
+              ))}
+            </div>
+
+            <Card className="p-6">
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Icon name="Link" size={18} className="text-primary" />Официальные ссылки
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" asChild>
+                  <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer">
+                    <Icon name="Send" size={16} className="mr-2" />Telegram ID-Spark
+                  </a>
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href="https://t.me/Danii_music_Original" target="_blank" rel="noopener noreferrer">
+                    <Icon name="Music" size={16} className="mr-2" />Danii Music
+                  </a>
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href="https://www.anything.com/invite/xxqxdx6s" target="_blank" rel="noopener noreferrer">
+                    <Icon name="UserPlus" size={16} className="mr-2" />Пригласить друга
+                  </a>
                 </Button>
               </div>
+            </Card>
+          </TabsContent>
 
-              <div className="grid md:grid-cols-4 gap-4">
-                {['Игры', 'Музыка', 'Видео', 'Изображения'].map((category, i) => (
-                  <Card key={i} className="p-6 text-center hover:shadow-lg transition-all cursor-pointer">
-                    <Icon name={['Gamepad2', 'Music', 'Video', 'Image'][i] as any} size={32} className="mx-auto mb-3 text-primary" />
-                    <h3 className="font-semibold">{category}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{Math.floor(Math.random() * 500 + 100)} товаров</p>
-                  </Card>
-                ))}
+          {/* MARKETPLACE */}
+          <TabsContent value="marketplace" className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black">Маркетплейс</h2>
+                <p className="text-muted-foreground mt-1">Добавляй и покупай контент</p>
               </div>
+              <Dialog open={prodOpen} onOpenChange={setProdOpen}>
+                <DialogTrigger asChild>
+                  <Button><Icon name="Plus" size={16} className="mr-2" />Добавить товар</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader><DialogTitle>Новый товар</DialogTitle></DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Название *</label>
+                      <Input placeholder="Название товара..." value={prodForm.name}
+                        onChange={e => setProdForm(p => ({ ...p, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Категория</label>
+                      <Select value={prodForm.category} onValueChange={v => setProdForm(p => ({ ...p, category: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Цена (в Пертах) *</label>
+                      <Input placeholder="Например: 500" value={prodForm.price}
+                        onChange={e => setProdForm(p => ({ ...p, price: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Описание</label>
+                      <Textarea placeholder="Расскажи о своём товаре..." value={prodForm.desc} rows={3}
+                        onChange={e => setProdForm(p => ({ ...p, desc: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Твоё имя / ник *</label>
+                      <Input placeholder="Как тебя зовут?" value={prodForm.author}
+                        onChange={e => setProdForm(p => ({ ...p, author: e.target.value }))} />
+                    </div>
+                    <Button className="w-full" onClick={addProduct}
+                      disabled={!prodForm.name || !prodForm.price || !prodForm.author}>
+                      Опубликовать
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
 
-              <div className="grid md:grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6].map((item) => (
-                  <Card key={item} className="overflow-hidden hover:shadow-lg transition-all">
-                    <div className="h-48 bg-gradient-to-br from-primary/20 to-secondary/20"></div>
+            {products.length === 0 ? (
+              <Card className="p-16 text-center border-dashed">
+                <Icon name="ShoppingBag" size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                <h3 className="text-xl font-bold mb-2">Пока пусто</h3>
+                <p className="text-muted-foreground mb-6">Будь первым — добавь свой товар!</p>
+                <Button onClick={() => setProdOpen(true)}>
+                  <Icon name="Plus" size={16} className="mr-2" />Добавить первый товар
+                </Button>
+              </Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {products.map(p => (
+                  <Card key={p.id} className="overflow-hidden hover:shadow-lg transition-all hover:border-primary/40">
+                    <div className="h-36 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                      <Icon name={CAT_ICONS[p.category] || 'Package'} size={40} className="text-primary/60" />
+                    </div>
                     <div className="p-4">
-                      <h3 className="font-semibold mb-2">Товар #{item}</h3>
+                      <div className="flex items-start justify-between mb-1">
+                        <h3 className="font-bold text-base line-clamp-1">{p.name}</h3>
+                        <Badge variant="secondary" className="text-xs ml-2 shrink-0">{p.category}</Badge>
+                      </div>
+                      {p.desc && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{p.desc}</p>}
                       <div className="flex items-center justify-between">
-                        <span className="text-lg font-bold text-primary">{Math.floor(Math.random() * 500 + 50)} Пертов</span>
-                        <Button size="sm">
-                          <Icon name="ShoppingCart" size={16} className="mr-1" />
-                          Купить
-                        </Button>
+                        <div>
+                          <p className="font-black text-primary text-lg">{p.price} Пертов</p>
+                          <p className="text-xs text-muted-foreground">от {p.author}</p>
+                        </div>
+                        <Button size="sm"><Icon name="ShoppingCart" size={14} className="mr-1" />Купить</Button>
                       </div>
                     </div>
                   </Card>
                 ))}
               </div>
-            </div>
+            )}
           </TabsContent>
 
-          <TabsContent value="chats" className="animate-fade-in">
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card className="p-4 md:col-span-1">
-                <h3 className="font-semibold mb-4">Чаты</h3>
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5].map((chat) => (
-                    <div key={chat} className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/10 cursor-pointer">
-                      <Avatar>
-                        <AvatarFallback>U{chat}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="font-medium">Пользователь {chat}</p>
-                        <p className="text-sm text-muted-foreground">Последнее сообщение...</p>
+          {/* JOBS */}
+          <TabsContent value="jobs" className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black">Вакансии</h2>
+                <p className="text-muted-foreground mt-1">Найди работу или найди сотрудника</p>
+              </div>
+              <Dialog open={jobOpen} onOpenChange={setJobOpen}>
+                <DialogTrigger asChild>
+                  <Button><Icon name="Plus" size={16} className="mr-2" />Создать вакансию</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader><DialogTitle>Новая вакансия</DialogTitle></DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Должность *</label>
+                      <Input placeholder="Например: Frontend разработчик" value={jobForm.title}
+                        onChange={e => setJobForm(p => ({ ...p, title: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Компания / Имя *</label>
+                      <Input placeholder="Название компании или ваше имя" value={jobForm.company}
+                        onChange={e => setJobForm(p => ({ ...p, company: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-sm font-medium mb-1.5 block">Город / Место</label>
+                        <Input placeholder="Москва / Удалённо" value={jobForm.location}
+                          onChange={e => setJobForm(p => ({ ...p, location: e.target.value }))} />
                       </div>
-                      <Badge variant="secondary">{chat}</Badge>
+                      <div>
+                        <label className="text-sm font-medium mb-1.5 block">Зарплата</label>
+                        <Input placeholder="от 50 000 ₽" value={jobForm.salary}
+                          onChange={e => setJobForm(p => ({ ...p, salary: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Тип занятости</label>
+                      <Select value={jobForm.type} onValueChange={v => setJobForm(p => ({ ...p, type: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{JOB_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Описание</label>
+                      <Textarea placeholder="Что нужно делать? Какие требования?" value={jobForm.desc} rows={3}
+                        onChange={e => setJobForm(p => ({ ...p, desc: e.target.value }))} />
+                    </div>
+                    <Button className="w-full" onClick={addJob} disabled={!jobForm.title || !jobForm.company}>
+                      Опубликовать вакансию
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {jobs.length === 0 ? (
+              <Card className="p-16 text-center border-dashed">
+                <Icon name="Briefcase" size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                <h3 className="text-xl font-bold mb-2">Вакансий пока нет</h3>
+                <p className="text-muted-foreground mb-6">Разместите первую вакансию или предложите услуги!</p>
+                <Button onClick={() => setJobOpen(true)}>
+                  <Icon name="Plus" size={16} className="mr-2" />Создать вакансию
+                </Button>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {jobs.map(job => (
+                  <Card key={job.id} className="p-6 hover:shadow-lg hover:border-primary/40 transition-all">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h3 className="text-xl font-bold">{job.title}</h3>
+                          <Badge variant="secondary">{job.type}</Badge>
+                        </div>
+                        <p className="font-medium text-primary mb-1">{job.company}</p>
+                        {job.desc && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{job.desc}</p>}
+                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                          {job.location && <span className="flex items-center gap-1"><Icon name="MapPin" size={14} />{job.location}</span>}
+                          {job.salary && <span className="flex items-center gap-1 text-foreground font-semibold"><Icon name="Banknote" size={14} />{job.salary}</span>}
+                        </div>
+                      </div>
+                      <Button className="shrink-0">Откликнуться</Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ALEXA */}
+          <TabsContent value="alexa" className="animate-fade-in">
+            <div className="flex flex-col" style={{ height: 'calc(100vh - 260px)', minHeight: '520px' }}>
+              <div className="flex items-center gap-4 mb-5 p-5 rounded-2xl border border-violet-500/20"
+                style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(59,130,246,0.08) 50%, rgba(236,72,153,0.08) 100%)' }}>
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shadow-lg shrink-0">
+                  <Icon name="Sparkles" size={26} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black">Алекса</h2>
+                  <p className="text-sm text-muted-foreground">ИИ-помощник SuperSpark · задай любой вопрос</p>
+                </div>
+                <Badge variant="outline" className="ml-auto">Бета</Badge>
+              </div>
+
+              <Card className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {messages.map(msg => (
+                    <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.role === 'alexa' && (
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shrink-0 mt-1">
+                          <Icon name="Sparkles" size={14} className="text-white" />
+                        </div>
+                      )}
+                      <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-sm'
+                          : 'bg-muted rounded-bl-sm'
+                      }`}>
+                        {msg.text}
+                      </div>
+                      {msg.role === 'user' && (
+                        <Avatar className="w-8 h-8 shrink-0 mt-1">
+                          <AvatarFallback className="text-xs bg-secondary text-secondary-foreground">Вы</AvatarFallback>
+                        </Avatar>
+                      )}
                     </div>
                   ))}
-                </div>
-              </Card>
-
-              <Card className="p-6 md:col-span-2 flex flex-col">
-                <div className="flex items-center gap-3 pb-4 border-b mb-4">
-                  <Avatar>
-                    <AvatarFallback>U1</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="font-semibold">Пользователь 1</p>
-                    <p className="text-sm text-muted-foreground">В сети</p>
-                  </div>
-                  <Button size="sm" variant="outline">
-                    <Icon name="Video" size={18} className="mr-2" />
-                    Видеозвонок
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Icon name="Phone" size={18} />
-                  </Button>
-                </div>
-
-                <div className="flex-1 space-y-4 mb-4 min-h-[300px]">
-                  <div className="flex justify-end">
-                    <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg max-w-xs">
-                      Привет! Как дела?
-                    </div>
-                  </div>
-                  <div className="flex justify-start">
-                    <div className="bg-muted px-4 py-2 rounded-lg max-w-xs">
-                      Отлично! А у тебя?
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Input placeholder="Написать сообщение..." />
-                  <Button>
-                    <Icon name="Send" size={18} />
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="jobs" className="animate-fade-in">
-            <div className="grid gap-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold">Вакансии</h2>
-                <Button>
-                  <Icon name="Plus" size={18} className="mr-2" />
-                  Создать вакансию
-                </Button>
-              </div>
-
-              <div className="grid gap-4">
-                {[1, 2, 3, 4, 5].map((job) => (
-                  <Card key={job} className="p-6 hover:shadow-lg transition-all">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xl font-semibold">Frontend разработчик</h3>
-                          <Badge variant="secondary">Удалённо</Badge>
-                          <Badge className="bg-green-500">Открыта</Badge>
-                        </div>
-                        <p className="text-muted-foreground mb-3">
-                          Компания ищет опытного Frontend разработчика для работы над веб-приложениями
-                        </p>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="flex items-center gap-1">
-                            <Icon name="MapPin" size={16} />
-                            Москва
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Icon name="Clock" size={16} />
-                            Полная занятость
-                          </span>
-                          <span className="flex items-center gap-1 text-primary font-semibold">
-                            <Icon name="Coins" size={16} />
-                            от 150000 Пертов/мес
-                          </span>
-                        </div>
+                  {alexaTyping && (
+                    <div className="flex gap-3 items-start">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shrink-0">
+                        <Icon name="Sparkles" size={14} className="text-white" />
                       </div>
-                      <Button>Откликнуться</Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="alexa" className="animate-fade-in">
-            <div className="grid gap-6">
-              <Card className="p-8 bg-gradient-to-br from-purple-500/20 via-blue-500/20 to-pink-500/20 border-none">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                    <Icon name="Sparkles" size={32} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-3xl font-bold">Алекса</h2>
-                    <p className="text-muted-foreground">ИИ помощник от ID-Spark</p>
-                  </div>
-                </div>
-                <p className="text-lg mb-4">
-                  Создавайте веб-приложения и сайты по описанию, генерируйте изображения, видео и музыку!
-                </p>
-                <Badge variant="outline" className="text-sm">Требуется пароль для создания сайтов</Badge>
-              </Card>
-
-              <Card className="p-6">
-                <div className="space-y-4 mb-6 min-h-[300px]">
-                  <div className="flex gap-3">
-                    <Avatar className="bg-gradient-to-br from-purple-500 to-blue-500">
-                      <AvatarFallback className="text-white">AI</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <Card className="p-4 bg-muted">
-                        <p>Привет! Я Алекса, ваш ИИ-помощник. Я могу помочь вам создать веб-приложения, сайты, сгенерировать изображения и многое другое!</p>
-                      </Card>
-                    </div>
-                  </div>
-
-                  {alexaMessage && (
-                    <div className="flex gap-3 justify-end">
-                      <div className="flex-1 max-w-2xl">
-                        <Card className="p-4 bg-primary text-primary-foreground">
-                          <p>{alexaMessage}</p>
-                        </Card>
+                      <div className="bg-muted px-4 py-3 rounded-2xl rounded-bl-sm flex gap-1 items-center h-10">
+                        <span className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-                      <Avatar>
-                        <AvatarFallback>ID</AvatarFallback>
-                      </Avatar>
                     </div>
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                <div className="flex gap-2">
-                  <Input 
-                    placeholder="Спросите Алексу что-нибудь..." 
-                    value={alexaMessage}
-                    onChange={(e) => setAlexaMessage(e.target.value)}
-                  />
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <Icon name="Lock" size={18} className="mr-2" />
-                        Создать сайт
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Введите пароль для создания сайта</DialogTitle>
-                      </DialogHeader>
-                      <Input type="password" placeholder="Введите пароль..." />
-                      <Button className="w-full">Подтвердить</Button>
-                    </DialogContent>
-                  </Dialog>
-                  <Button onClick={() => setAlexaMessage('')}>
-                    <Icon name="Send" size={18} />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
-                  <Button variant="outline" size="sm">
-                    <Icon name="Image" size={16} className="mr-2" />
-                    Изображение
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Icon name="Video" size={16} className="mr-2" />
-                    Видео
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Icon name="Music" size={16} className="mr-2" />
-                    Музыка
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Icon name="Code" size={16} className="mr-2" />
-                    Код
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="profile" className="animate-fade-in">
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card className="p-6 text-center">
-                <Avatar className="w-24 h-24 mx-auto mb-4">
-                  <AvatarFallback className="text-2xl bg-primary text-primary-foreground">ID</AvatarFallback>
-                </Avatar>
-                <h2 className="text-xl font-bold mb-1">ID-Spark</h2>
-                <p className="text-muted-foreground mb-4">id-spark@yandex.ru</p>
-                <Badge className="mb-4">Создатель SuperSpark</Badge>
-                <div className="space-y-2 mt-6">
-                  <Button className="w-full" variant="outline">Редактировать профиль</Button>
-                  <Button className="w-full" variant="outline">Мои публикации</Button>
-                </div>
-              </Card>
-
-              <Card className="p-6 md:col-span-2">
-                <h3 className="text-xl font-semibold mb-4">Статистика</h3>
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <Card className="p-4 bg-primary/10">
-                    <p className="text-sm text-muted-foreground mb-1">Баланс Пертов</p>
-                    <p className="text-2xl font-bold">{pertsBalance}</p>
-                  </Card>
-                  <Card className="p-4 bg-secondary/10">
-                    <p className="text-sm text-muted-foreground mb-1">Покупок</p>
-                    <p className="text-2xl font-bold">23</p>
-                  </Card>
-                  <Card className="p-4 bg-accent/10">
-                    <p className="text-sm text-muted-foreground mb-1">Друзей</p>
-                    <p className="text-2xl font-bold">156</p>
-                  </Card>
-                  <Card className="p-4 bg-green-500/10">
-                    <p className="text-sm text-muted-foreground mb-1">Создано</p>
-                    <p className="text-2xl font-bold">8</p>
-                  </Card>
-                </div>
-
-                <h3 className="text-xl font-semibold mb-4">Контакты</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                    <Icon name="Mail" size={20} />
-                    <span>ID-Spark@yandex.ru</span>
+                <div className="p-4 border-t">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Спроси Алексу что-нибудь..."
+                      value={alexaInput}
+                      onChange={e => setAlexaInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendAlexaMessage()}
+                      disabled={alexaTyping}
+                    />
+                    <Button onClick={sendAlexaMessage} disabled={!alexaInput.trim() || alexaTyping} size="icon">
+                      <Icon name="Send" size={18} />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                    <Icon name="Phone" size={20} />
-                    <span>+7 (999) 123-45-67</span>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['Что умеешь?', 'Привет!', 'Что такое Перты?', 'Создай сайт'].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setAlexaInput(s)}
+                        className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
+                      >
+                        {s}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </Card>
             </div>
           </TabsContent>
 
+          {/* SETTINGS */}
           <TabsContent value="settings" className="animate-fade-in">
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold mb-6">Настройки</h2>
-
+            <Card className="p-8 max-w-lg mx-auto">
+              <h2 className="text-2xl font-black mb-6">Настройки</h2>
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Тема оформления</h3>
-                  <Select value={currentTheme} onValueChange={handleThemeChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <label className="text-sm font-semibold mb-2 block">Тема оформления</label>
+                  <Select value={theme} onValueChange={handleTheme}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {themes.map(theme => (
-                        <SelectItem key={theme.value} value={theme.value}>
-                          {theme.label}
-                        </SelectItem>
+                      {Object.entries(THEME_LABELS).map(([val, label]) => (
+                        <SelectItem key={val} value={val}>{label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Язык интерфейса</h3>
+                  <label className="text-sm font-semibold mb-2 block">Язык интерфейса</label>
                   <Select defaultValue="ru">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ru">Русский</SelectItem>
                       <SelectItem value="en">English</SelectItem>
                       <SelectItem value="es">Español</SelectItem>
-                      <SelectItem value="fr">Français</SelectItem>
                       <SelectItem value="de">Deutsch</SelectItem>
+                      <SelectItem value="fr">Français</SelectItem>
                       <SelectItem value="zh">中文</SelectItem>
                       <SelectItem value="ja">日本語</SelectItem>
                       <SelectItem value="ar">العربية</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Уведомления</h3>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" defaultChecked />
-                      <span>Уведомления о новых сообщениях</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" defaultChecked />
-                      <span>Уведомления о покупках</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" />
-                      <span>Синтез речи (голос мудрого мужчины)</span>
-                    </label>
+                <div className="pt-2 border-t space-y-3">
+                  <p className="text-xs text-muted-foreground">SuperSpark Beta v1.0 · 2026 · Создано ID-Spark</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer">Поддержка</a>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer">Сообщить о баге</a>
+                    </Button>
                   </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Конфиденциальность</h3>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" defaultChecked />
-                      <span>Разрешить просмотр контактов</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4" defaultChecked />
-                      <span>Показывать статус онлайн</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t">
-                  <Button className="w-full" variant="destructive">
-                    Выйти из аккаунта
-                  </Button>
                 </div>
               </div>
             </Card>
@@ -552,26 +537,12 @@ const Index = () => {
         </Tabs>
       </div>
 
-      <footer className="border-t mt-12 py-8">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground mb-4">
-            © 2026 SuperSpark. Создано ID-Spark
-          </p>
-          <div className="flex justify-center gap-4">
-            <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-              Telegram
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-              Политика конфиденциальности
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-              Условия использования
-            </a>
-          </div>
-        </div>
+      <footer className="border-t mt-12 py-6 text-center text-sm text-muted-foreground">
+        © 2026 SuperSpark · Создано{' '}
+        <a href="https://t.me/ID_Spark" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+          ID-Spark
+        </a>
       </footer>
     </div>
   );
-};
-
-export default Index;
+}
